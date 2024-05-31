@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Training Log</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 20px;
+      background-color: #fff;
+      border-radius: 5px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .exercise {
+      margin-bottom: 20px;
+      border-bottom: 1px solid #ccc;
+      padding-bottom: 10px;
+    }
+    input[type="text"],
+    input[type="number"] {
+      width: calc(100% - 20px);
+      margin: 5px 0;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    .rep-range-box {
+      width: calc(100% - 20px);
+      margin: 5px 0;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      text-align: center;
+    }
+    button {
+      padding: 10px;
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 100%;
+      margin: 5px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      border-bottom: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    .graph-container {
+      margin-top: 20px;
+    }
+    @media (min-width: 600px) {
+      input[type="text"],
+      input[type="number"],
+      .rep-range-box {
+        width: calc(25% - 20px);
+        display: inline-block;
+        margin-right: 10px;
+      }
+      button {
+        width: auto;
+        display: inline-block;
+        margin: 0 10px 0 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Training Log</h1>
+    <button class="add-exercise-button" onclick="showAddExerciseBox()">Add Exercise</button>
+    <div id="exerciseEntries"></div>
+    <div class="add-exercise-box" id="addExerciseBox" style="display: none;">
+      <input type="text" id="exerciseNameInput" placeholder="Exercise Name">
+      <button onclick="addExercise()">Add</button>
+    </div>
+    <h2>Progress Graph</h2>
+    <div class="graph-container">
+      <canvas id="volumeLoadChart"></canvas>
+    </div>
+    <h2>Progress Table</h2>
+    <table id="logTable">
+      <tr>
+        <th>Date</th>
+        <th>Exercise</th>
+        <th>Volume Load</th>
+      </tr>
+    </table>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', (event) => {
+      loadFromLocalStorage();
+    });
+
+    function showAddExerciseBox() {
+      document.getElementById('addExerciseBox').style.display = 'block';
+    }
+
+    function addExercise() {
+      var exerciseName = document.getElementById('exerciseNameInput').value.trim();
+      if (!exerciseName) {
+        alert('Please enter the exercise name.');
+        return;
+      }
+
+      var exerciseEntry = document.createElement('div');
+      exerciseEntry.className = 'exercise';
+      exerciseEntry.innerHTML = '<h3>' + exerciseName + '</h3>' +
+                                '<label for="repRange">Rep Range:</label>' +
+                                '<input type="text" class="rep-range-box" placeholder="Rep Range">' +
+                                '<label for="sets">Sets:</label>' +
+                                '<input type="number" class="sets" value="1" onchange="showSetInputs(this)">' +
+                                '<button onclick="deleteExercise(this)">Delete</button>' +
+                                '<div class="setInputs"></div>' +
+                                '<input type="number" placeholder="Volume Load" disabled>' +
+                                '<button onclick="calculateVolumeLoad(this)">Enter</button>';
+      document.getElementById('exerciseEntries').appendChild(exerciseEntry);
+
+      var setsInput = exerciseEntry.querySelector('.sets');
+      setsInput.value = '';
+      setsInput.value = '1'; // Refresh sets box twice
+
+      showSetInputs(setsInput); // Show inputs for 1 set by default
+
+      document.getElementById('exerciseNameInput').value = '';
+      document.getElementById('addExerciseBox').style.display = 'none';
+
+      saveToLocalStorage();
+    }
+
+    function showSetInputs(input) {
+      var sets = parseInt(input.value);
+      var setInputsDiv = input.nextElementSibling.nextElementSibling;
+      setInputsDiv.innerHTML = '';
+      if (!isNaN(sets) && sets > 0) {
+        for (var i = 0; i < sets; i++) {
+          setInputsDiv.innerHTML += '<label for="reps">Reps:</label>' +
+                                    '<input type="number" class="reps" placeholder="Reps"> ' +
+                                    '<label for="weight">Weight (kg):</label>' +
+                                    '<input type="number" class="weight" placeholder="Weight (kg)"> <br>';
+        }
+      }
+      saveToLocalStorage();
+    }
+
+    function calculateVolumeLoad(button) {
+      var exerciseEntry = button.parentElement;
+      var sets = parseInt(exerciseEntry.querySelector('.sets').value);
+      var setInputsDiv = exerciseEntry.querySelector('.setInputs');
+      var weightInputs = setInputsDiv.querySelectorAll('.weight');
+      var repsInputs = setInputsDiv.querySelectorAll('.reps');
+      var volumeLoadInput = exerciseEntry.querySelector('input[placeholder="Volume Load"]');
+      var volumeLoad = 0;
+
+      for (var i = 0; i < weightInputs.length; i++) {
+        var weight = parseFloat(weightInputs[i].value);
+        var reps = parseInt(repsInputs[i].value);
+        volumeLoad += weight * reps;
+      }
+
+      volumeLoadInput.value = volumeLoad;
+
+      var exerciseName = exerciseEntry.querySelector('h3').innerText;
+      var date = new Date().toISOString().slice(0, 10);
+      addToLog(date, exerciseName, volumeLoad);
+
+      saveToLocalStorage();
+    }
+
+    function addToLog(date, exerciseName, volumeLoad) {
+      var table = document.getElementById('logTable');
+      var rows = table.getElementsByTagName('tr');
+      for (var i = 1
+; i < rows.length; i++) {
+        var cells = rows[i].getElementsByTagName('td');
+        if (cells[0].innerHTML === date && cells[1].innerHTML === exerciseName) {
+          cells[2].innerHTML = volumeLoad; // Replace volume load for the same date and exercise
+          updateChart(); // Update the chart
+          return;
+        }
+      }
+      var newRow = table.insertRow(-1);
+      var dateCell = newRow.insertCell(0);
+      var exerciseCell = newRow.insertCell(1);
+      var volumeLoadCell = newRow.insertCell(2);
+      dateCell.innerHTML = date;
+      exerciseCell.innerHTML = exerciseName;
+      volumeLoadCell.innerHTML = volumeLoad;
+      updateChart(); // Update the chart
+    }
+
+    function deleteExercise(button) {
+      var exerciseEntry = button.parentElement;
+      var exerciseName = exerciseEntry.querySelector('h3').innerText;
+      var date = new Date().toISOString().slice(0, 10);
+
+      // Remove exercise entry from the DOM
+      exerciseEntry.remove();
+
+      // Remove the corresponding row in the log table
+      var table = document.getElementById('logTable');
+      var rows = table.getElementsByTagName('tr');
+      for (var i = 1; i < rows.length; i++) {
+        var cells = rows[i].getElementsByTagName('td');
+        if (cells[0].innerHTML === date && cells[1].innerHTML === exerciseName) {
+          table.deleteRow(i);
+          break;
+        }
+      }
+
+      // Update the chart
+      updateChart();
+      saveToLocalStorage();
+    }
+
+    function updateChart() {
+      const logTable = document.getElementById('logTable');
+      const data = [];
+      for (let i = 1; i < logTable.rows.length; i++) {
+        const date = logTable.rows[i].cells[0].textContent;
+        const exercise = logTable.rows[i].cells[1].textContent;
+        const volumeLoad = parseFloat(logTable.rows[i].cells[2].textContent);
+        data.push({ date: date, exercise: exercise, volumeLoad: volumeLoad });
+      }
+
+      const datasets = {};
+      data.forEach(entry => {
+        if (!datasets[entry.exercise]) {
+          datasets[entry.exercise] = [];
+        }
+        datasets[entry.exercise].push({ x: entry.date, y: entry.volumeLoad });
+      });
+
+      if (chart) {
+        chart.destroy();
+      }
+
+      const ctx = document.getElementById('volumeLoadChart').getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          datasets: Object.keys(datasets).map(exercise => ({
+            label: exercise,
+            data: datasets[exercise],
+            borderColor: '#' + (Math.random() * 0xFFFFFF << 0).toString(16).padStart(6, '0'),
+            fill: false
+          }))
+        },
+        options: {
+          scales: {
+            xAxes: [{
+              type: 'time',
+              time: {
+                parser: 'YYYY-MM-DD',
+                tooltipFormat: 'll'
+              },
+              scaleLabel: {
+                display: true,
+                labelString: 'Date'
+              }
+            }],
+            yAxes: [{
+              scaleLabel: {
+                display: true,
+                labelString: 'Volume Load'
+              }
+            }]
+          },
+          title: {
+            display: true,
+            text: 'Progress Graph'
+          }
+        }
+      });
+    }
+
+    var chart;
+
+    function saveToLocalStorage() {
+      const exerciseEntries = document.getElementById('exerciseEntries').innerHTML;
+      const logTable = document.getElementById('logTable').innerHTML;
+
+      const exerciseData = [];
+      const exerciseEntriesDiv = document.getElementById('exerciseEntries').children;
+      for (let i = 0; i < exerciseEntriesDiv.length; i++) {
+        const exerciseEntry = exerciseEntriesDiv[i];
+        const exerciseName = exerciseEntry.querySelector('h3').innerText;
+        const repRange = exerciseEntry.querySelector('.rep-range-box').value;
+        const sets = exerciseEntry.querySelector('.sets').value;
+        const repsInputs = exerciseEntry.querySelectorAll('.reps');
+        const weightInputs = exerciseEntry.querySelectorAll('.weight');
+        const setDetails = [];
+        for (let j = 0; j < repsInputs.length; j++) {
+          setDetails.push({
+            reps: repsInputs[j].value,
+            weight: weightInputs[j].value
+          });
+        }
+        exerciseData.push({
+          name: exerciseName,
+          repRange: repRange,
+          sets: sets,
+          setDetails: setDetails
+        });
+      }
+
+      localStorage.setItem('exerciseEntries', JSON.stringify(exerciseData));
+      localStorage.setItem('logTable', logTable);
+    }
+
+    function loadFromLocalStorage() {
+      const exerciseData = JSON.parse(localStorage.getItem('exerciseEntries'));
+      const logTable = localStorage.getItem('logTable');
+      if (exerciseData) {
+        const exerciseEntriesDiv = document.getElementById('exerciseEntries');
+        exerciseEntriesDiv.innerHTML = '';
+        exerciseData.forEach(exercise => {
+          const exerciseEntry = document.createElement('div');
+          exerciseEntry.className = 'exercise';
+          exerciseEntry.innerHTML = '<h3>' + exercise.name + '</h3>' +
+                                    '<label for="repRange">Rep Range:</label>' +
+                                    '<input type="text" class="rep-range-box" value="' + exercise.repRange + '" placeholder="Rep Range">' +
+                                    '<label for="sets">Sets:</label>' +
+                                    '<input type="number" class="sets" value="' + exercise.sets + '" onchange="showSetInputs(this)">' +
+                                    '<button onclick="deleteExercise(this)">Delete</button>' +
+                                    '<div class="setInputs"></div>' +
+                                    '<input type="number" placeholder="Volume Load" disabled>' +
+                                    '<button onclick="calculateVolumeLoad(this)">Enter</button>';
+          exerciseEntriesDiv.appendChild(exerciseEntry);
+
+          const setInputsDiv = exerciseEntry.querySelector('.setInputs');
+          for (let i = 0; i < exercise.setDetails.length; i++) {
+            const setDetail = exercise.setDetails[i];
+            setInputsDiv.innerHTML += '<label for="reps">Reps:</label>' +
+                                      '<input type="number" class="reps" value="' + setDetail.reps + '" placeholder="Reps"> ' +
+                                      '<label for="weight">Weight (kg):</label>' +
+                                      '<input type="number" class="weight" value="' + setDetail.weight + '" placeholder="Weight (kg)"> <br>';
+          }
+        });
+      }
+      if (logTable) {
+        document.getElementById('logTable').innerHTML = logTable;
+      }
+      updateChart();
+    }
+  </script>
+</body>
+</html>
